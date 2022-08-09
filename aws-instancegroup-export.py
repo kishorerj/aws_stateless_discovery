@@ -2,7 +2,7 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, wait
-import csv
+import csv, traceback
 import datetime
 import logging
 import os
@@ -26,6 +26,7 @@ region_counter = 0
 austoscaling_info = {
     'AutoScalingGroupName':'',
     'LaunchTemplateName':'',
+    'Region':'',
     'LaunchConfigurationName':'',
     'MinSize':'',
     'MaxSize':'',
@@ -56,7 +57,7 @@ austoscaling_target_groups = {
     'DomainName':'',    
 }
 
-as_field_names = ['AutoScalingGroupName', 'LaunchTemplateName', 'LaunchConfigurationName','MinSize',
+as_field_names = ['AutoScalingGroupName', 'LaunchTemplateName', 'Region', 'LaunchConfigurationName','MinSize',
     'MaxSize', 'DesiredSize','LoadBalancerTargetGroup', 'AvailabilityZone', 'VPC', 'Tags', 'LoadBalancerName', 'CreatedDate']
 as_vms_field_names = [
         'AutoScalingGroupName',
@@ -146,7 +147,7 @@ def zip_files(dir_name, zip_file_name):
 
 
 
-def set_instances(as_instance,launch_template):
+def set_instances(as_instance,launch_template, region_name):
     vm_instances= as_instance.get('Instances')
     for vm_instance in vm_instances:
         as_vms = austoscaling_vm_instances.copy()
@@ -161,31 +162,34 @@ def set_instances(as_instance,launch_template):
         as_vm_list.append(as_vms)
 
 
-def set_target_groups(as_instance):
-    client = boto3.client('elbv2')
+def set_target_groups(as_instance, region_name):
+    client = boto3.client('elbv2', region_name)
     as_name=as_instance.get('AutoScalingGroupName')
-    print(as_instance.get('TargetGroupARNs'))
-    target_groups=client.describe_target_groups(
-        TargetGroupArns=as_instance.get('TargetGroupARNs')
-        
-    )
-    print(target_groups)
-    for tg in target_groups.get('TargetGroups'):
+    print(as_name , as_instance.get('TargetGroupARNs'))
     
-        loadbalancers = client.describe_load_balancers(
-        LoadBalancerArns=
-            tg.get('LoadBalancerArns') )
-        print(loadbalancers)
-        for lb in loadbalancers.get('LoadBalancers'):
-            tg_info=austoscaling_target_groups.copy()
-            tg_info['AutoScalingGroupName']=as_name
-            tg_info['TargetGroupName']=tg.get('TargetGroupName')
-            tg_info['TargetGroupArn']=tg.get('TargetGroupArn')
-            tg_info['LoadBalancerArn']= tg.get('LoadBalancerArn')
-            tg_info['LoadBalancerName']= lb.get('LoadBalancerName')
-            tg_info['DNSName']= lb.get('DNSName')
+    if(as_instance.get('TargetGroupARNs')):
+    
+      target_groups=client.describe_target_groups(
+          TargetGroupArns=as_instance.get('TargetGroupARNs')
+          
+      )
+      print(target_groups)
+      for tg in target_groups.get('TargetGroups'):
+          if(tg.get('LoadBalancerArns')):
+            loadbalancers = client.describe_load_balancers(
+            LoadBalancerArns=
+                tg.get('LoadBalancerArns') )
+            print(loadbalancers)
+            for lb in loadbalancers.get('LoadBalancers'):
+                tg_info=austoscaling_target_groups.copy()
+                tg_info['AutoScalingGroupName']=as_name
+                tg_info['TargetGroupName']=tg.get('TargetGroupName')
+                tg_info['TargetGroupArn']=tg.get('TargetGroupArn')
+                tg_info['LoadBalancerArn']= tg.get('LoadBalancerArn')
+                tg_info['LoadBalancerName']= lb.get('LoadBalancerName')
+                tg_info['DNSName']= lb.get('DNSName')
 
-            as_tg_list.append(tg_info)
+                as_tg_list.append(tg_info)
 
 
 
@@ -237,6 +241,7 @@ for region in regions['Regions']:
          launch_template=  as_instance.get('MixedInstancesPolicy').get('LaunchTemplate').get('LaunchTemplateSpecification').get('LaunchTemplateName')
         
         as_info['LaunchTemplateName']= launch_template
+        as_info['Region']= region['RegionName']
         as_info['LaunchConfigurationName'] = as_instance.get('LaunchConfigurationName')
         as_info['MinSize'] = as_instance.get('MinSize')
         as_info['MaxSize'] = as_instance.get('MaxSize')
@@ -246,15 +251,17 @@ for region in regions['Regions']:
         as_info['Tags'] = as_instance.get('Tags')
         as_info['LoadBalancerName'] = as_instance.get('LoadBalancerNames')
         as_info['CreatedDate'] = as_instance.get('CreatedTime')
+        as_list.append(as_info)
         try:
-            set_target_groups(as_instance)        
-            set_instances(as_instance,launch_template)
+            set_target_groups(as_instance,  region['RegionName'])        
+            set_instances(as_instance,launch_template,  region['RegionName'])
         except:
             print("Exception while setting target groups")
-            as_info.clear()
+            # printing stack trace
+            traceback.print_exc()
             continue
 
-        as_list.append(as_info)
+        
 
 write_to_csv(as_list, as_field_names, 'as_info.csv')
 write_to_csv(as_vm_list, as_vms_field_names, 'as_vms.csv')
