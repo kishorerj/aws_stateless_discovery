@@ -204,7 +204,7 @@ create_directory('./out')
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logging.basicConfig(filename='./out/aws-as-info.log',
                     format=log_format,
-                    level=logging.ERROR)
+                    level=logging.INFO)
 
 
 ec2_client = boto3.client('ec2')
@@ -214,7 +214,7 @@ as_client = boto3.client('autoscaling')
 logging.info('Get all regions')
 regions = ec2_client.describe_regions(AllRegions=True)
 
-logging.info('Get Organization ID')
+logging.info(f"Got regions {len(regions['Regions'])}")
 
 
 
@@ -222,24 +222,30 @@ for region in regions['Regions']:
     total_regions = len(regions['Regions'])
     region_counter += 1
     print(region['RegionName'])
+    logging.info(f"Region is {region['RegionName']}")
     try: 
       client = boto3.client('autoscaling',  region['RegionName'])
-   
-
       display_script_progress()
 
       autoscaling_groups= client.describe_auto_scaling_groups()
+      logging.info(f"no of AS groups {len(autoscaling_groups.get('AutoScalingGroups'))}")
+
     except:
-      print("Exception occured")
+      print("No data found")
       continue    
 
     for as_instance in autoscaling_groups.get('AutoScalingGroups'): 
         as_info = austoscaling_info.copy()
+
+        logging.info(f"AS GROUP entered name is {as_instance.get('AutoScalingGroupName')}")
         as_info['AutoScalingGroupName']= as_instance.get('AutoScalingGroupName')
+        
         launch_template=''
         if(as_instance.get('MixedInstancesPolicy') is not None):
-         launch_template=  as_instance.get('MixedInstancesPolicy').get('LaunchTemplate').get('LaunchTemplateSpecification').get('LaunchTemplateName')
+         # if(as_instance.get('MixedInstancesPolicy') ):
+            launch_template=  as_instance.get('MixedInstancesPolicy').get('LaunchTemplate').get('LaunchTemplateSpecification').get('LaunchTemplateName')
         
+        logging.info(f'launch template name is : {launch_template}')
         as_info['LaunchTemplateName']= launch_template
         as_info['Region']= region['RegionName']
         as_info['LaunchConfigurationName'] = as_instance.get('LaunchConfigurationName')
@@ -252,6 +258,7 @@ for region in regions['Regions']:
         as_info['LoadBalancerName'] = as_instance.get('LoadBalancerNames')
         as_info['CreatedDate'] = as_instance.get('CreatedTime')
         as_list.append(as_info)
+
         try:
             set_target_groups(as_instance,  region['RegionName'])        
             set_instances(as_instance,launch_template,  region['RegionName'])
