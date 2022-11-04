@@ -1,0 +1,3 @@
+AutoScalingGroupName,TargetGroupName,TargetGroupArn,LoadBalancerName,LoadBalancerArn,DNSName
+test-kishore,demo-as1-1,arn:aws:elasticloadbalancing:ap-south-1:194923240143:targetgroup/demo-as1-1/06282fd99de8f994,demo-as1-1,,internal-demo-as1-1-2071901336.ap-south-1.elb.amazonaws.com
+test22-launch,demo-as1-1,arn:aws:elasticloadbalancing:ap-south-1:194923240143:targetgroup/demo-as1-1/06282fd99de8f994,demo-as1-1,,internal-demo-as1-1-2071901336.ap-south-1.elb.amazonaws.com

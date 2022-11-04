@@ -1,0 +1,2 @@
+AutoScalingGroupName,LaunchTemplateName,LaunchConfigurationeName,InstanceType,LifecycleState,HealthStatus
+test-kishore,demo-temp1,,c6a.large,InService,Healthy
